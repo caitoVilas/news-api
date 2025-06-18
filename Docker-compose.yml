@@ -1,0 +1,74 @@
+version: "3"
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - 22181:2181
+
+  kafka:
+    image: confluencentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - 29092:9092
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092, PLAINTEXT_HOST://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT, PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSET_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CREATE_TOPICS: "news-topic:1:1"
+      KAFKA_OFFSET_RETENTION_MINUTES: 60
+
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - 6379:6379
+    environment:
+      REDIS_PASSWORD: "caito"
+    volumes:
+      - redis-data:/data
+
+  ms-news:
+    build:
+      context: ./ms-news
+      dockerfile: Dockerfile
+    image: ms-news:latest
+    container_name: ms-news
+    depends_on:
+      - kafka
+      - redis
+    ports:
+      - 8000:8000
+    environment:
+      KAFKA_SERVER: kafka:9092
+      EDIS_SERVER: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: caito
+
+  ms-worker:
+    build:
+      context: ./ms-worker
+      dockerfile: Dockerfile
+    image: ms-worker:latest
+    container_name: ms-worker
+    depends_on:
+      - kafka
+      - redis
+    environment:
+      KAFKA_SERVER: kafka:9092
+      REDIS_SERVER: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: caito
+      MEDIASTACK_URI: http://api.mediastack.com/v1/news
+      MEDIASTACK_API_KEY: 49a8881367ef3bd753ae60fd76e4b772
+    ports:
+      - 8001:8001
+
+volumes:
+    redis-data:
